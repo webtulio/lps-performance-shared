@@ -79,7 +79,7 @@ git push origin main
 ### 3. Invalida o cache jsDelivr
 
 ```bash
-curl -X POST "https://purge.jsdelivr.net/gh/webtulio/lps-performance-shared@main/lp.js"
+curl "https://purge.jsdelivr.net/gh/webtulio/lps-performance-shared@main/lp.js"
 ```
 
 Propaga em segundos.
@@ -100,7 +100,7 @@ Quando uma mudança for **destrutiva**, considerar tag `v2.0.0` e migrar as LPs 
 cd /c/Users/Tulio/lps-performance-shared
 git revert <hash-do-commit-quebrado>
 git push origin main
-curl -X POST "https://purge.jsdelivr.net/gh/webtulio/lps-performance-shared@main/lp.js"
+curl "https://purge.jsdelivr.net/gh/webtulio/lps-performance-shared@main/lp.js"
 ```
 
 Em até 1 min as 15 LPs voltam pra versão anterior.
