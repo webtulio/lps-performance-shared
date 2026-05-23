@@ -60,6 +60,20 @@
 
     function loadTypebotWidget(cfg){
       var operadoraNome = cfg.operadora || 'Salyd';
+
+      // CRÍTICO: setar window.TS_PAGE_CTX ANTES do Typebot carregar.
+      // O Set variable block "ctx_operadora" no init_ctx_utms (código herdado do tabelasaude)
+      // lê window.TS_PAGE_CTX.operadora — não consegue ler prefilledVariables porque variáveis
+      // do Typebot NÃO ficam expostas como globais JS dentro de blocks de código.
+      window.TS_PAGE_CTX = {
+        operadora:        cfg.operadora || '',
+        operadora_source: 'lp',
+        page_id:          window.location.pathname,
+        page_title:       document.title,
+        page_url:         window.location.href,
+        post_type:        'lp'
+      };
+
       var s = document.createElement('script');
       s.type = 'module';
       s.textContent =
@@ -69,6 +83,8 @@
           "typebot: " + JSON.stringify(cfg.typebotId) + "," +
           "apiHost: " + JSON.stringify(cfg.typebotHost) + "," +
           "prefilledVariables: {" +
+            // Mantém prefilled pra Group #1 renderizar greeting com {{ctx_operadora}}.
+            // O Set variable block depois sobrescreve via window.TS_PAGE_CTX (mesmo valor — ok).
             "ctx_operadora: " + JSON.stringify(cfg.operadora) + "," +
             "ctx_operadora_source: 'lp'," +
             "ctx_page_url: window.location.href," +
