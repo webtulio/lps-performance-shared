@@ -97,7 +97,8 @@
             "autoShowDelay: 4000" +
           "}," +
           "theme: {" +
-            "button: { backgroundColor: '#25D366', iconColor: '#FFFFFF', size: 'large' }" +
+            "button: { backgroundColor: '#25D366', iconColor: '#FFFFFF', size: 'large' }," +
+            "placement: 'left'" +
           "}" +
         "});";
       document.head.appendChild(s);
