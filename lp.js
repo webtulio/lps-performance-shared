@@ -1,7 +1,7 @@
 /*!
- * lp.js — JS unificado para as LPs do portfólio Salyd
- * Repo: https://github.com/webtulio/lps-salyd (pasta /shared)
- * CDN:  https://cdn.jsdelivr.net/gh/webtulio/lps-salyd@main/shared/lp.js
+ * lp.js — JS unificado para as 15 LPs do portfólio Performance Digital / Salyd
+ * Repo: https://github.com/webtulio/lps-performance-shared
+ * CDN:  https://cdn.jsdelivr.net/gh/webtulio/lps-performance-shared@main/lp.js
  *
  * Auto-init no DOMContentLoaded. Procura por <form id="leadForm">.
  * Configuração lida das data-attrs do form:
