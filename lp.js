@@ -41,11 +41,42 @@
       buttonDefault: form.dataset.buttonDefault || 'Baixar Tabela',
       buttonBg:      form.dataset.buttonBg      || '#ff9c1b',
       buttonColor:   form.dataset.buttonColor   || '',
-      unidade:       form.dataset.unidade       || ''
+      unidade:       form.dataset.unidade       || '',
+      typebotId:     form.dataset.typebotId     || '',    // ex: "salyd-humana" — se presente, injeta bubble Typebot
+      typebotHost:   form.dataset.typebotHost   || 'https://viewer.salyd.com.br'
     };
 
     if(!cfg.operadora || !cfg.formId){
       console.warn('[lp.js] data-operadora e data-form-id são obrigatórios no <form id="leadForm">');
+    }
+
+    // ===== Typebot bubble (opcional, se data-typebot-id) =====
+    // Carrega o widget Typebot self-hosted como chat bubble flutuante.
+    // Funciona em PARALELO ao form — usuário escolhe (bubble ou form).
+    // Payload do Typebot é IDÊNTICO ao do form (mesmo webhook salyd-lps-global).
+    if(cfg.typebotId){
+      (function loadTypebot(){
+        var s = document.createElement('script');
+        s.type = 'module';
+        s.textContent =
+          "import Typebot from 'https://cdn.jsdelivr.net/npm/@typebot.io/js@0.3/dist/web.js';" +
+          "Typebot.initBubble({" +
+            "typebot: " + JSON.stringify(cfg.typebotId) + "," +
+            "apiHost: " + JSON.stringify(cfg.typebotHost) + "," +
+            "prefilledVariables: {" +
+              "ctx_operadora: " + JSON.stringify(cfg.operadora) + "," +
+              "ctx_operadora_source: 'lp'," +
+              "ctx_page_url: window.location.href," +
+              "ctx_page_title: document.title," +
+              "ctx_page_id: window.location.pathname," +
+              "ctx_referrer: document.referrer || ''" +
+            "}," +
+            "theme: {" +
+              "button: { backgroundColor: " + JSON.stringify(cfg.buttonBg) + " }" +
+            "}" +
+          "});";
+        document.head.appendChild(s);
+      })();
     }
 
     // ===== Phone mask + normalização =====
