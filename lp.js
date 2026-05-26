@@ -216,18 +216,123 @@
       });
     }
 
-    // ===== UTM capture =====
-    var utmData = (function(){
-      var p = new URLSearchParams(window.location.search);
-      return {
-        utm_source:   p.get('utm_source')   || '',
-        utm_medium:   p.get('utm_medium')   || '',
-        utm_campaign: p.get('utm_campaign') || '',
-        utm_term:     p.get('utm_term')     || '',
-        utm_content:  p.get('utm_content')  || '',
-        gclid:        p.get('gclid')        || '',
-        fbclid:       p.get('fbclid')       || ''
+    // ===== UTM capture com inferência por referrer (padrão GA4) =====
+    // Cascata de atribuição: UTM explícita > gclid/fbclid > referrer → infere > direct.
+    // Persiste em localStorage 30d (last-click com fallback pra direct via cache).
+    // Schema completo: docs/ORIGEM_LEAD.md no salydcore.
+    var utmData = (function captureUTMs(){
+      var STORAGE_KEY = 'lps_utms_v1';
+      var TTL_MS = 30*24*60*60*1000;
+      var qs = new URLSearchParams(window.location.search);
+
+      // 1. UTMs explícitas na URL (prioridade máxima — overrides tudo)
+      var u = {
+        utm_source:   qs.get('utm_source')   || '',
+        utm_medium:   qs.get('utm_medium')   || '',
+        utm_campaign: qs.get('utm_campaign') || '',
+        utm_term:     qs.get('utm_term')     || '',
+        utm_content:  qs.get('utm_content')  || '',
+        utm_id:       qs.get('utm_id')       || '',
+        gclid:        qs.get('gclid')        || '',
+        fbclid:       qs.get('fbclid')       || ''
       };
+
+      function persist(data){
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ts: Date.now(), utms: data})); } catch(_){}
+      }
+      function loadPersisted(){
+        try {
+          var raw = localStorage.getItem(STORAGE_KEY);
+          if(!raw) return null;
+          var d = JSON.parse(raw);
+          if(!d || !d.ts || Date.now()-d.ts > TTL_MS) return null;
+          return d.utms;
+        } catch(_) { return null; }
+      }
+
+      // Se já tem utm_source explícito, persiste e retorna
+      if(u.utm_source){ persist(u); return u; }
+
+      // 2. gclid → google/cpc | fbclid → facebook/paid_social
+      if(u.gclid){ u.utm_source = 'google';   u.utm_medium = 'cpc';         persist(u); return u; }
+      if(u.fbclid){u.utm_source = 'facebook'; u.utm_medium = 'paid_social'; persist(u); return u; }
+
+      // 3. Sem nada na URL: tenta inferir por referrer
+      var referrer = document.referrer || '';
+      var currentHost = window.location.hostname.toLowerCase().replace(/^www\./,'');
+
+      // Sem referrer → ver se tem persistido (preserva atribuição original em visitas direct)
+      if(!referrer){
+        var p = loadPersisted();
+        if(p && p.utm_source && p.utm_source !== 'direct') return p;
+        u.utm_source = 'direct'; u.utm_medium = 'direct';
+        return u;
+      }
+
+      var refHost;
+      try { refHost = new URL(referrer).hostname.toLowerCase().replace(/^www\./,''); }
+      catch(_) { u.utm_source = 'direct'; u.utm_medium = 'direct'; return u; }
+
+      // Mesmo domínio = não conta como referral
+      if(refHost === currentHost){
+        var p2 = loadPersisted();
+        if(p2 && p2.utm_source && p2.utm_source !== 'direct') return p2;
+        u.utm_source = 'direct'; u.utm_medium = 'direct';
+        return u;
+      }
+
+      // Helper: match host contra lista (incluindo subdomínios)
+      function matchHost(host, list){
+        for(var k in list){
+          if(host === k || host.endsWith('.' + k)) return list[k];
+        }
+        return null;
+      }
+
+      // Search engines (GA4 padrão) → organic
+      var SEARCH = {
+        'google.com':'google', 'google.com.br':'google',
+        'bing.com':'bing', 'duckduckgo.com':'duckduckgo',
+        'yahoo.com':'yahoo', 'br.search.yahoo.com':'yahoo',
+        'yandex.com':'yandex', 'baidu.com':'baidu',
+        'ecosia.org':'ecosia', 'search.brave.com':'brave'
+      };
+      var src = matchHost(refHost, SEARCH);
+      if(src){ u.utm_source = src; u.utm_medium = 'organic'; persist(u); return u; }
+
+      // GEO (LLMs) → organic_geo  (custom — único valor não-GA4 na nossa convenção)
+      var GEO = {
+        'chatgpt.com':'chatgpt', 'openai.com':'chatgpt', 'chat.openai.com':'chatgpt',
+        'manus.im':'manus',
+        'perplexity.ai':'perplexity',
+        'copilot.microsoft.com':'copilot',
+        'gemini.google.com':'gemini'
+      };
+      src = matchHost(refHost, GEO);
+      if(src){ u.utm_source = src; u.utm_medium = 'organic_geo'; persist(u); return u; }
+
+      // LinkedIn → referral (decisão explícita da doc, NÃO social)
+      if(refHost === 'linkedin.com' || refHost.endsWith('.linkedin.com') || refHost === 'lnkd.in'){
+        u.utm_source = 'linkedin'; u.utm_medium = 'referral'; persist(u); return u;
+      }
+
+      // Social networks (orgânico) → social
+      var SOCIAL = {
+        'facebook.com':'facebook', 'l.facebook.com':'facebook', 'm.facebook.com':'facebook', 'lm.facebook.com':'facebook',
+        'instagram.com':'instagram', 'l.instagram.com':'instagram',
+        'twitter.com':'twitter', 'x.com':'twitter', 't.co':'twitter',
+        'youtube.com':'youtube', 'youtu.be':'youtube', 'm.youtube.com':'youtube',
+        'tiktok.com':'tiktok',
+        'whatsapp.com':'whatsapp', 'web.whatsapp.com':'whatsapp', 'wa.me':'whatsapp',
+        'pinterest.com':'pinterest', 'reddit.com':'reddit', 'snapchat.com':'snapchat',
+        'telegram.org':'telegram', 't.me':'telegram',
+        'discord.com':'discord', 'messenger.com':'messenger'
+      };
+      src = matchHost(refHost, SOCIAL);
+      if(src){ u.utm_source = src; u.utm_medium = 'social'; persist(u); return u; }
+
+      // Fallback: outros sites → <dominio> / referral
+      u.utm_source = refHost; u.utm_medium = 'referral'; persist(u); return u;
     })();
 
     // ===== IP lookup =====
@@ -374,7 +479,7 @@
           content:  utmData.utm_content  || '',
           term:     utmData.utm_term     || '',
           keyword:  '',
-          id:       utmData.utm_campaign || '',
+          id:       utmData.utm_id       || '',
           gclid:    utmData.gclid        || '',
           fbclid:   utmData.fbclid       || '',
           ttclid:   '',
