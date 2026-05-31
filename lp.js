@@ -71,7 +71,9 @@
         page_id:          window.location.pathname,
         page_title:       document.title,
         page_url:         window.location.href,
-        post_type:        'lp'
+        post_type:        'lp',
+        user_agent:       navigator.userAgent || '',  // p/ typebot meta.user_agent
+        ip:               ''  // preenchido async pelo fetch ipify abaixo
       };
 
       var s = document.createElement('script');
@@ -351,7 +353,11 @@
     var userIP = '';
     fetch('https://api.ipify.org?format=json')
       .then(function(r){ return r.json(); })
-      .then(function(d){ userIP = d.ip; })
+      .then(function(d){
+        userIP = d.ip;
+        // expõe pra Typebot ler via TS_PAGE_CTX.ip (preenche meta.ip)
+        if (window.TS_PAGE_CTX) window.TS_PAGE_CTX.ip = d.ip;
+      })
       .catch(function(){});
 
     // ===== Tela de sucesso + URL state =====
