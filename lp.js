@@ -220,8 +220,12 @@
     // Cascata de atribuição: UTM explícita > gclid/fbclid > referrer → infere > direct.
     // Persiste em localStorage 30d (last-click com fallback pra direct via cache).
     // Schema completo: docs/ORIGEM_LEAD.md no salydcore.
+    //
+    // IMPORTANTE: storage key e formato FLAT compatíveis com o Typebot (init_ctx_utms)
+    // que lê `localStorage.getItem('ts_utms_v1')` e acessa `s['utm_source']` direto.
+    // Por isso salvamos flat ({utm_source, utm_medium, ..., _ts}) na key ts_utms_v1.
     var utmData = (function captureUTMs(){
-      var STORAGE_KEY = 'lps_utms_v1';
+      var STORAGE_KEY = 'ts_utms_v1'; // mesma key do Typebot (origin-scoped, sem conflito)
       var TTL_MS = 30*24*60*60*1000;
       var qs = new URLSearchParams(window.location.search);
 
@@ -237,16 +241,24 @@
         fbclid:       qs.get('fbclid')       || ''
       };
 
+      // Persiste em formato FLAT (compat Typebot) + _ts pra TTL check
       function persist(data){
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ts: Date.now(), utms: data})); } catch(_){}
+        try {
+          var toSave = {};
+          for(var k in data) toSave[k] = data[k];
+          toSave._ts = Date.now();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+        } catch(_){}
       }
       function loadPersisted(){
         try {
           var raw = localStorage.getItem(STORAGE_KEY);
           if(!raw) return null;
           var d = JSON.parse(raw);
-          if(!d || !d.ts || Date.now()-d.ts > TTL_MS) return null;
-          return d.utms;
+          if(!d || !d._ts || Date.now()-d._ts > TTL_MS) return null;
+          var clean = {};
+          for(var k in d) if(k !== '_ts') clean[k] = d[k];
+          return clean;
         } catch(_) { return null; }
       }
 
