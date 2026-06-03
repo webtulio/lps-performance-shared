@@ -478,7 +478,9 @@
           email:               data.email || '',
           uf:                  data.estado || '',
           cidade:              data.cidade || '',
-          tipo_plano:          data.tipodeplano || '',
+          tipo_plano:          data.tipodeplano || '',   // descontinuado — mantido vazio pra compat schema v2.0.0
+          cnpj_status:         data.cnpj || '',          // novo: 'sim' | 'nao'
+          vidas:               data.vidas || '',         // novo: '1' | '2' | '3-5' | '6-10' | '10+'
           operadora_preferida: ''
         },
         contexto: {
