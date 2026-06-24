@@ -43,7 +43,8 @@
       buttonColor:   form.dataset.buttonColor   || '',
       unidade:       form.dataset.unidade       || '',
       typebotId:     form.dataset.typebotId     || '',    // ex: "salyd-humana" — se presente, injeta bubble Typebot
-      typebotHost:   form.dataset.typebotHost   || 'https://viewer.salyd.com.br'
+      typebotHost:   form.dataset.typebotHost   || 'https://viewer.salyd.com.br',
+      exitIntent:    form.dataset.exitIntent !== 'off'    // exit-intent popup desktop (default ligado; "off" desativa)
     };
 
     if(!cfg.operadora || !cfg.formId){
@@ -56,6 +57,111 @@
     // Payload do Typebot é IDÊNTICO ao do form (mesmo webhook salyd-lps-global).
     if(cfg.typebotId){
       loadTypebotWidget(cfg);
+    }
+
+    // ===== Exit-intent popup (somente desktop) =====
+    if(cfg.exitIntent){
+      initExitIntent(cfg, form);
+    }
+
+    function initExitIntent(cfg, form){
+      // Guards: só desktop com mouse, 1× por sessão, não se já converteu
+      var isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches && window.innerWidth > 768;
+      if(!isDesktop) return;
+      if(new URLSearchParams(window.location.search).get('envio') === 'sucesso') return;
+      try { if(sessionStorage.getItem('lps_exit_shown')) return; } catch(_){}
+
+      var accent = cfg.buttonBg || '#ff9c1b';
+      var shown = false;
+
+      // CSS isolado (1×)
+      if(!document.getElementById('lps-exit-styles')){
+        var css =
+          '.lps-exit-overlay{position:fixed;inset:0;background:rgba(10,20,18,.55);z-index:42999999;'+
+            'display:none;align-items:center;justify-content:center;padding:20px;'+
+            'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}'+
+          '.lps-exit-overlay.is-open{display:flex;animation:lpsExitFade .2s ease-out}'+
+          '@keyframes lpsExitFade{from{opacity:0}to{opacity:1}}'+
+          '.lps-exit-card{background:#fff;border-radius:16px;max-width:440px;width:100%;'+
+            'overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.3);animation:lpsExitPop .25s cubic-bezier(.18,.89,.32,1.1)}'+
+          '@keyframes lpsExitPop{from{transform:translateY(12px) scale(.97);opacity:0}to{transform:none;opacity:1}}'+
+          '.lps-exit-head{background:#15302b;color:#fff;padding:20px 22px;position:relative}'+
+          '.lps-exit-tag{font-size:.82rem;opacity:.85;margin-bottom:6px}'+
+          '.lps-exit-head h3{font-size:1.3rem;line-height:1.25;margin:0;color:#fff;font-weight:700}'+
+          '.lps-exit-close{position:absolute;top:14px;right:14px;width:30px;height:30px;border:0;'+
+            'border-radius:50%;background:rgba(255,255,255,.18);color:#fff;font-size:18px;cursor:pointer;line-height:1}'+
+          '.lps-exit-close:hover{background:rgba(255,255,255,.3)}'+
+          '.lps-exit-body{padding:20px 22px 24px}'+
+          '.lps-exit-body>p{margin:0 0 16px;color:#444;font-size:.98rem;line-height:1.5}'+
+          '.lps-exit-list{list-style:none;margin:0 0 20px;padding:0}'+
+          '.lps-exit-list li{position:relative;padding-left:24px;margin-bottom:10px;color:#1f2937;font-size:.95rem}'+
+          '.lps-exit-list li::before{content:"";position:absolute;left:0;top:6px;width:9px;height:9px;'+
+            'border-radius:50%;background:#22c55e}'+
+          '.lps-exit-cta{display:block;width:100%;padding:15px;border:0;border-radius:30px;'+
+            'color:#fff;font-weight:700;font-size:1.02rem;cursor:pointer;font-family:inherit;'+
+            'transition:filter .15s}'+
+          '.lps-exit-cta:hover{filter:brightness(1.07)}'+
+          '.lps-exit-dismiss{display:block;width:100%;margin-top:10px;padding:8px;background:none;'+
+            'border:0;color:#8a909c;font-size:.9rem;cursor:pointer;font-family:inherit}'+
+          '.lps-exit-dismiss:hover{color:#555}';
+        var st = document.createElement('style');
+        st.id = 'lps-exit-styles';
+        st.textContent = css;
+        document.head.appendChild(st);
+      }
+
+      // Markup
+      var ov = document.createElement('div');
+      ov.className = 'lps-exit-overlay';
+      ov.setAttribute('role','dialog');
+      ov.setAttribute('aria-modal','true');
+      ov.innerHTML =
+        '<div class="lps-exit-card">'+
+          '<div class="lps-exit-head">'+
+            '<button class="lps-exit-close" type="button" aria-label="Fechar">&times;</button>'+
+            '<div class="lps-exit-tag">Espere! &#128075;</div>'+
+            '<h3>Antes de sair, receba a cota&ccedil;&atilde;o dos melhores planos</h3>'+
+          '</div>'+
+          '<div class="lps-exit-body">'+
+            '<p>Comparamos as principais operadoras pra voc&ecirc; pagar menos.</p>'+
+            '<ul class="lps-exit-list">'+
+              '<li>Gr&aacute;tis e sem compromisso</li>'+
+              '<li>Especialista de verdade no WhatsApp</li>'+
+              '<li>Resposta em ~2 minutos</li>'+
+            '</ul>'+
+            '<button class="lps-exit-cta" type="button" style="background:'+accent+'">Quero minha cota&ccedil;&atilde;o gr&aacute;tis</button>'+
+            '<button class="lps-exit-dismiss" type="button">Agora n&atilde;o</button>'+
+          '</div>'+
+        '</div>';
+      document.body.appendChild(ov);
+
+      function open(){
+        if(shown) return;
+        shown = true;
+        try { sessionStorage.setItem('lps_exit_shown','1'); } catch(_){}
+        ov.classList.add('is-open');
+        if(window.dataLayer){ window.dataLayer.push({event:'exit_intent_shown', form_id:cfg.formId}); }
+      }
+      function close(){ ov.classList.remove('is-open'); }
+
+      // CTA → fecha, rola pro form, foca no nome
+      ov.querySelector('.lps-exit-cta').addEventListener('click', function(){
+        close();
+        if(window.dataLayer){ window.dataLayer.push({event:'exit_intent_cta', form_id:cfg.formId}); }
+        var alvo = document.getElementById('form') || form;
+        if(alvo){ alvo.scrollIntoView({behavior:'smooth', block:'center'}); }
+        var nome = form.querySelector('input[name="nome"]');
+        if(nome){ setTimeout(function(){ try{ nome.focus({preventScroll:true}); }catch(e){} }, 450); }
+      });
+      ov.querySelector('.lps-exit-close').addEventListener('click', close);
+      ov.querySelector('.lps-exit-dismiss').addEventListener('click', close);
+      ov.addEventListener('click', function(e){ if(e.target === ov) close(); });
+      document.addEventListener('keydown', function(e){ if(e.key === 'Escape') close(); });
+
+      // Trigger: mouse saindo pelo topo da viewport (barra de endereço / fechar aba)
+      document.addEventListener('mouseout', function(e){
+        if(!e.relatedTarget && e.clientY <= 0){ open(); }
+      });
     }
 
     function loadTypebotWidget(cfg){
