@@ -266,6 +266,7 @@
         if(cMail){
           if(elMail) elMail.removeAttribute('required'); // e-mail vira opcional na variante B (payload aceita vazio)
           var addmail = elc('a','lps-ab-addmail','+ adicionar e-mail (opcional)');
+          addmail.style.color = accent; // destaque legível em card claro ou escuro
           mailrow = elc('div','form-row lps-ab-row lps-ab-hid'); mailrow.appendChild(cMail);
           addmail.addEventListener('click', function(){
             mailrow.classList.remove('lps-ab-hid'); addmail.classList.add('lps-ab-hid');
@@ -331,20 +332,25 @@
         if(document.getElementById('lps-ab-styles')) return;
         var css =
           '.lps-ab-hid{display:none !important}'+
+          // textos secundários HERDAM a cor do form (branco no card escuro, escuro no claro) => legível em qualquer LP
+          '.lps-ab-steplab{margin:0 0 12px !important;font-size:12.5px;color:inherit;opacity:.72}'+
+          '.lps-ab-geonote{margin:0 0 8px !important;font-size:12px;line-height:1.45;color:inherit;opacity:.72}'+
+          '.lps-ab-micro{margin:12px 0 0 !important;font-size:12px;line-height:1.4;text-align:center;color:inherit;opacity:.68}'+
+          '.lps-ab-addmail{display:inline-block;margin:2px 0 6px;font-weight:600;font-size:12.5px;text-decoration:none;border-bottom:1px dashed;cursor:pointer}'+
+          // pílula de prova social: fundo próprio claro => contraste garantido em qualquer fundo
           '.lps-ab-proof{display:flex;align-items:center;gap:8px;background:#F0FBF7;border:1px solid #CBEEDF;'+
-            'border-radius:999px;padding:7px 12px;margin:0 0 12px;font-weight:600;font-size:12.5px;color:#00785F}'+
-          '.lps-ab-dot{flex:none;width:8px;height:8px;border-radius:50%;background:#2EE6A8;animation:lpsAbPulse 1.8s infinite}'+
-          '@keyframes lpsAbPulse{70%{box-shadow:0 0 0 8px rgba(46,230,168,0)}}'+
-          '.lps-ab-prog{height:6px;border-radius:999px;background:#EAF3F2;overflow:hidden;margin:0 0 5px}'+
-          '.lps-ab-prog i{display:block;height:100%;width:50%;background:#00B894;border-radius:999px;transition:width .35s}'+
-          '.lps-ab-steplab{margin:0 0 10px !important;font-size:12px;color:#42606B}'+
-          '.lps-ab-next{display:block;width:100%;margin-top:14px;border:0;border-radius:10px;color:#fff;'+
-            'font-weight:700;font-size:15px;padding:14px 18px;cursor:pointer;font-family:inherit}'+
+            'border-radius:999px;padding:8px 13px;margin:0 0 14px;font-weight:600;font-size:12.5px;line-height:1.35;color:#0b6b52}'+
+          '.lps-ab-dot{flex:none;width:8px;height:8px;border-radius:50%;background:#22c55e;animation:lpsAbPulse 1.8s infinite}'+
+          '@keyframes lpsAbPulse{70%{box-shadow:0 0 0 8px rgba(34,197,94,0)}}'+
+          // trilha da barra em cinza translúcido => visível em card claro E escuro
+          '.lps-ab-prog{height:6px;border-radius:999px;background:rgba(128,128,128,.28);overflow:hidden;margin:0 0 7px}'+
+          '.lps-ab-prog i{display:block;height:100%;width:50%;background:#22c55e;border-radius:999px;transition:width .35s}'+
+          '.lps-ab-next{display:block;width:100%;margin-top:16px;border:0;border-radius:8px;color:#fff;'+
+            'font-weight:700;font-size:15px;padding:15px 18px;cursor:pointer;font-family:inherit;line-height:1.2}'+
           '.lps-ab-next:disabled{opacity:.45;cursor:not-allowed}'+
-          '.lps-ab-addmail{display:inline-block;margin:8px 0 0;font-weight:600;font-size:12.5px;color:#00785F;'+
-            'text-decoration:none;border-bottom:1px dashed;cursor:pointer}'+
-          '.lps-ab-geonote,.lps-ab-micro{margin:7px 0 0 !important;font-size:12px;color:#42606B}'+
-          '.lps-ab-micro{text-align:center;color:#00785F;font-weight:600}';
+          // espaçamento consistente dos campos no passo 2 (12px; cobre uf/cidade empilhados no mobile)
+          '.lps-ab-s2 .input-icon input,.lps-ab-s2 .input-icon select{margin-bottom:12px}'+
+          '.lps-ab-s2 .btn-submit{margin-top:8px}';
         var st = document.createElement('style'); st.id = 'lps-ab-styles'; st.textContent = css;
         document.head.appendChild(st);
       }
