@@ -230,9 +230,11 @@
         var elFone = q('input[name="fone"]');
         var elMail = q('input[name="email"]');
         var elUf   = q('select[name="estado"]');
-        var elCid  = q('input[name="cidade"]');
+        var elCid  = q('input[name="cidade"]') || q('select[name="cidade"]'); // unimed multi-cidade usa <select>
+        var elCidFb= q('[name="cidade_fallback"]'); // unimed: input de fallback (normalmente oculto)
         function cell(n){ return n ? (n.closest('.input-icon') || n.parentElement) : null; }
         var cNome = cell(elNome), cFone = cell(elFone), cMail = cell(elMail), cUf = cell(elUf), cCid = cell(elCid);
+        var cCidFb = cell(elCidFb);
         var fgCnpj  = q('input[name="cnpj"]');  fgCnpj  = fgCnpj  && fgCnpj.closest('.field-group');
         var fgVidas = q('input[name="vidas"]'); fgVidas = fgVidas && fgVidas.closest('.field-group');
         var btn = q('.btn-submit') || q('button[type="submit"]');
@@ -267,6 +269,7 @@
           var rMail = elc('div','form-row lps-ab-row'); rMail.appendChild(cMail); s2.appendChild(rMail);
         }
         var r3 = elc('div','form-row lps-ab-row'); r3.appendChild(cUf); r3.appendChild(cCid); s2.appendChild(r3);
+        if(cCidFb && cCidFb !== cCid){ s2.appendChild(cCidFb); } // move o fallback de cidade junto (senão a limpeza o removeria)
         var geonote = elc('p','lps-ab-geonote lps-ab-hid','📍 Já preenchemos com a sua localização. Confira e ajuste se precisar.');
         s2.appendChild(geonote);
         s2.appendChild(btn);
@@ -328,9 +331,9 @@
         var css =
           '.lps-ab-hid{display:none !important}'+
           // textos secundários HERDAM a cor do form (branco no card escuro, escuro no claro) => legível em qualquer LP
-          '.lps-ab-steplab{margin:0 0 12px !important;font-size:12.5px;color:inherit;opacity:.72}'+
-          '.lps-ab-geonote{margin:0 0 8px !important;font-size:12px;line-height:1.45;color:inherit;opacity:.72}'+
-          '.lps-ab-micro{margin:12px 0 0 !important;font-size:12px;line-height:1.4;text-align:center;color:inherit;opacity:.68}'+
+          '.lps-ab-steplab{margin:0 0 12px !important;font-size:12.5px;color:inherit;opacity:.85}'+
+          '.lps-ab-geonote{margin:0 0 8px !important;font-size:12px;line-height:1.45;color:inherit;opacity:.85}'+
+          '.lps-ab-micro{margin:12px 0 0 !important;font-size:12px;line-height:1.4;text-align:center;color:inherit;opacity:.8}'+
           '.lps-ab-addmail{display:inline-block;margin:2px 0 6px;font-weight:600;font-size:12.5px;text-decoration:none;border-bottom:1px dashed;cursor:pointer}'+
           // pílula de prova social: fundo próprio claro => contraste garantido em qualquer fundo
           '.lps-ab-proof{display:flex;align-items:center;gap:8px;background:#F0FBF7;border:1px solid #CBEEDF;'+
