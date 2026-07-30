@@ -256,24 +256,19 @@
         next.style.background = accent;
         s1.appendChild(next);
 
-        // PASSO 2 — nome / whatsapp / uf+cidade / e-mail opcional / enviar
+        // PASSO 2 — nome / whatsapp / e-mail / uf+cidade / enviar
         var r1 = elc('div','form-row lps-ab-row'); r1.appendChild(cNome); s2.appendChild(r1);
         var r2 = elc('div','form-row lps-ab-row'); r2.appendChild(cFone); s2.appendChild(r2);
+        if(cMail){
+          // e-mail exibido aberto, como campo normal (sem clique, sem rótulo "opcional").
+          // Segue tecnicamente opcional (não bloqueia o envio se vazio; payload aceita ''),
+          // mas sem anunciar isso — só o placeholder "E-mail".
+          if(elMail) elMail.removeAttribute('required');
+          var rMail = elc('div','form-row lps-ab-row'); rMail.appendChild(cMail); s2.appendChild(rMail);
+        }
         var r3 = elc('div','form-row lps-ab-row'); r3.appendChild(cUf); r3.appendChild(cCid); s2.appendChild(r3);
         var geonote = elc('p','lps-ab-geonote lps-ab-hid','📍 Já preenchemos com a sua localização. Confira e ajuste se precisar.');
         s2.appendChild(geonote);
-        var mailrow = null;
-        if(cMail){
-          if(elMail) elMail.removeAttribute('required'); // e-mail vira opcional na variante B (payload aceita vazio)
-          var addmail = elc('a','lps-ab-addmail','+ adicionar e-mail (opcional)');
-          addmail.style.color = accent; // destaque legível em card claro ou escuro
-          mailrow = elc('div','form-row lps-ab-row lps-ab-hid'); mailrow.appendChild(cMail);
-          addmail.addEventListener('click', function(){
-            mailrow.classList.remove('lps-ab-hid'); addmail.classList.add('lps-ab-hid');
-            try { elMail.focus({preventScroll:true}); } catch(_){}
-          });
-          s2.appendChild(addmail); s2.appendChild(mailrow);
-        }
         s2.appendChild(btn);
         s2.appendChild(elc('p','lps-ab-micro','🔒 Sem ligações indesejadas. Só a tabela no seu WhatsApp.'));
 
@@ -286,7 +281,7 @@
 
         // Remove .form-row originais que ficaram vazias (fone/email e uf/cidade antigos)
         Array.prototype.forEach.call(form.querySelectorAll('.form-row'), function(r){
-          if(r!==r1 && r!==r2 && r!==r3 && r!==mailrow && !r.querySelector('input,select')) r.remove();
+          if(!r.querySelector('input,select')) r.remove(); // remove só as .form-row originais que ficaram vazias
         });
 
         // Gate do passo 1: só habilita "Ver minha tabela" com cnpj + vidas marcados
