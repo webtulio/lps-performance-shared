@@ -31,6 +31,17 @@
   var FORM_VERSION  = '2.0.0';
   var PAGE_LOADED_AT = Date.now();
 
+  // ===== A/B test: form em 2 passos (bundle) =====
+  // Kill switch MESTRE. false = todas as LPs voltam ao form single-step (controle),
+  // mesmo com o snippet de sorteio no <head>. Rollback = flip + bump SHA.
+  // O sorteio 50/50 + data-ab-form2step no <html> vive no <head> de cada LP (cache-safe);
+  // aqui só LEMOS o atributo. Variante vencedora do tabelasaude: 2 passos + prova social +
+  // progresso + copy 30s + e-mail opcional recolhido + geo prefill.
+  var AB2 = {
+    enabled:     true,
+    socialProof: '1.217 famílias receberam a tabela nos últimos 30 dias'
+  };
+
   function init(){
     var form = document.getElementById('leadForm');
     if(!form){ return; }
@@ -51,6 +62,10 @@
       console.warn('[lp.js] data-operadora e data-form-id são obrigatórios no <form id="leadForm">');
     }
 
+    // Variante A/B lida do atributo setado pelo snippet no <head> ('' se experimento off na LP)
+    var abVariant = '';
+    try { abVariant = document.documentElement.getAttribute('data-ab-form2step') || ''; } catch(_){}
+
     // ===== Typebot bubble com header customizado estilo Leadster =====
     // Carrega o widget Typebot self-hosted + injeta header HTML DENTRO do popup
     // (shadow DOM): avatar WhatsApp + nome "Marina - Planos {operadora}" + "Online agora".
@@ -62,6 +77,13 @@
     // ===== Exit-intent popup (somente desktop) =====
     if(cfg.exitIntent){
       initExitIntent(cfg, form);
+    }
+
+    // ===== A/B: form em 2 passos (bundle) =====
+    // Só roda se o <head> setou data-ab-form2step (LP no experimento) E kill switch ligado.
+    // Eventos disparam nos DOIS braços; reestruturação só na variante 'b'. Fail-open total.
+    if(AB2.enabled && abVariant){
+      initABForm2Step(cfg, form, abVariant);
     }
 
     function initExitIntent(cfg, form){
@@ -162,6 +184,170 @@
       document.addEventListener('mouseout', function(e){
         if(!e.relatedTarget && e.clientY <= 0){ open(); }
       });
+    }
+
+    // ===================================================================
+    // A/B — form em 2 passos (bundle). Módulo isolado, fail-open.
+    // Braço 'a' = controle intocado (só eventos). Braço 'b' = reestrutura o DOM
+    // POR CIMA: move os campos existentes pra 2 containers dentro do <form>.
+    // FormData/payload/webhook 100% intactos (mesmos nós, mesmos name).
+    // ===================================================================
+    function initABForm2Step(cfg, form, variant){
+      var dl = window.dataLayer = window.dataLayer || [];
+      function abPush(ev, extra){
+        var o = { event: ev, ab_test:'form2step', ab_variant: variant, form_id: cfg.formId, operadora: cfg.operadora };
+        if(extra){ for(var k in extra) o[k] = extra[k]; }
+        dl.push(o);
+      }
+      function reveal(){ try { form.style.visibility = 'visible'; } catch(_){} } // 'visible' vence o CSS anti-flicker
+
+      // --- Eventos nos DOIS braços (denominador honesto) ---
+      try {
+        var seenView = false;
+        if('IntersectionObserver' in window){
+          var io = new IntersectionObserver(function(ents){
+            ents.forEach(function(en){ if(en.isIntersecting && !seenView){ seenView = true; abPush('lps_form_view'); io.disconnect(); } });
+          }, { threshold: 0.4 });
+          io.observe(form);
+        } else { abPush('lps_form_view'); }
+      } catch(_){}
+      form.addEventListener('submit', function(){ abPush('lps_form_submit_attempt'); }, true);
+
+      // Controle: nada além dos eventos. Revela e sai.
+      if(variant !== 'b'){ reveal(); return; }
+
+      // Variante B: reestrutura. Qualquer erro => form original intacto e visível.
+      try { buildTwoStep(); } catch(e){ reveal(); }
+
+      function elc(tag, cls, html){ var e = document.createElement(tag); if(cls) e.className = cls; if(html != null) e.innerHTML = html; return e; }
+
+      function buildTwoStep(){
+        if(form.getAttribute('data-ab-built')){ reveal(); return; }
+        var accent = cfg.buttonBg || '#ff9c1b';
+        var q = function(s){ return form.querySelector(s); };
+
+        var elNome = q('input[name="nome"]');
+        var elFone = q('input[name="fone"]');
+        var elMail = q('input[name="email"]');
+        var elUf   = q('select[name="estado"]');
+        var elCid  = q('input[name="cidade"]');
+        function cell(n){ return n ? (n.closest('.input-icon') || n.parentElement) : null; }
+        var cNome = cell(elNome), cFone = cell(elFone), cMail = cell(elMail), cUf = cell(elUf), cCid = cell(elCid);
+        var fgCnpj  = q('input[name="cnpj"]');  fgCnpj  = fgCnpj  && fgCnpj.closest('.field-group');
+        var fgVidas = q('input[name="vidas"]'); fgVidas = fgVidas && fgVidas.closest('.field-group');
+        var btn = q('.btn-submit') || q('button[type="submit"]');
+
+        // Faltou peça essencial => aborta (fail-open, form original)
+        if(!cNome || !cFone || !elUf || !cUf || !elCid || !cCid || !fgCnpj || !fgVidas || !btn){ reveal(); return; }
+
+        form.setAttribute('data-ab-built','1');
+        injectABStyles();
+
+        var proof = elc('div','lps-ab-proof','<span class="lps-ab-dot"></span>'+ AB2.socialProof);
+        var prog  = elc('div','lps-ab-prog','<i></i>');
+        var lab   = elc('p','lps-ab-steplab','Passo 1 de 2 · leva 10 segundos');
+        var s1 = elc('div','lps-ab-s1');
+        var s2 = elc('div','lps-ab-s2 lps-ab-hid');
+
+        // PASSO 1 — só cliques (cnpj + vidas já são radio-cards existentes)
+        s1.appendChild(fgCnpj);
+        s1.appendChild(fgVidas);
+        var next = elc('button','lps-ab-next','Ver minha tabela →'); next.type = 'button'; next.disabled = true;
+        next.style.background = accent;
+        s1.appendChild(next);
+
+        // PASSO 2 — nome / whatsapp / uf+cidade / e-mail opcional / enviar
+        var r1 = elc('div','form-row lps-ab-row'); r1.appendChild(cNome); s2.appendChild(r1);
+        var r2 = elc('div','form-row lps-ab-row'); r2.appendChild(cFone); s2.appendChild(r2);
+        var r3 = elc('div','form-row lps-ab-row'); r3.appendChild(cUf); r3.appendChild(cCid); s2.appendChild(r3);
+        var geonote = elc('p','lps-ab-geonote lps-ab-hid','📍 Já preenchemos com a sua localização. Confira e ajuste se precisar.');
+        s2.appendChild(geonote);
+        var mailrow = null;
+        if(cMail){
+          if(elMail) elMail.removeAttribute('required'); // e-mail vira opcional na variante B (payload aceita vazio)
+          var addmail = elc('a','lps-ab-addmail','+ adicionar e-mail (opcional)');
+          mailrow = elc('div','form-row lps-ab-row lps-ab-hid'); mailrow.appendChild(cMail);
+          addmail.addEventListener('click', function(){
+            mailrow.classList.remove('lps-ab-hid'); addmail.classList.add('lps-ab-hid');
+            try { elMail.focus({preventScroll:true}); } catch(_){}
+          });
+          s2.appendChild(addmail); s2.appendChild(mailrow);
+        }
+        s2.appendChild(btn);
+        s2.appendChild(elc('p','lps-ab-micro','🔒 Sem ligações indesejadas. Só a tabela no seu WhatsApp.'));
+
+        // Injeta containers no topo do form
+        form.insertBefore(s2, form.firstChild);
+        form.insertBefore(s1, s2);
+        form.insertBefore(lab, s1);
+        form.insertBefore(prog, lab);
+        form.insertBefore(proof, prog);
+
+        // Remove .form-row originais que ficaram vazias (fone/email e uf/cidade antigos)
+        Array.prototype.forEach.call(form.querySelectorAll('.form-row'), function(r){
+          if(r!==r1 && r!==r2 && r!==r3 && r!==mailrow && !r.querySelector('input,select')) r.remove();
+        });
+
+        // Gate do passo 1: só habilita "Ver minha tabela" com cnpj + vidas marcados
+        function gate(){
+          next.disabled = !(form.querySelector('input[name="cnpj"]:checked') && form.querySelector('input[name="vidas"]:checked'));
+        }
+        Array.prototype.forEach.call(form.querySelectorAll('input[name="cnpj"],input[name="vidas"]'), function(r){ r.addEventListener('change', gate); });
+        gate();
+
+        next.addEventListener('click', function(){
+          s1.classList.add('lps-ab-hid'); s2.classList.remove('lps-ab-hid');
+          if(prog.firstChild) prog.firstChild.style.width = '88%';
+          lab.innerHTML = 'Último passo · sua tabela está quase pronta';
+          try { form.querySelector('input[name="nome"]').focus({preventScroll:true}); } catch(_){}
+          abPush('lps_form_step1');
+        });
+
+        // Geo prefill (só variante B, só campo vazio) — endpoint /api/geo (Vercel/CF headers)
+        fetchGeoPrefill(elUf, elCid, geonote);
+
+        reveal();
+      }
+
+      function fetchGeoPrefill(elUf, elCid, geonote){
+        try {
+          fetch('/api/geo', { credentials:'omit' })
+            .then(function(r){ return r.ok ? r.json() : null; })
+            .then(function(g){
+              if(!g) return;
+              var did = false;
+              if(g.uf && !elUf.value){ elUf.value = g.uf; elUf.dispatchEvent(new Event('change',{bubbles:true})); did = true; }
+              if(g.cidade && !elCid.value){
+                setTimeout(function(){ elCid.value = g.cidade; elCid.dispatchEvent(new Event('input',{bubbles:true})); }, 140);
+                did = true;
+              }
+              if(did && geonote) geonote.classList.remove('lps-ab-hid');
+            })
+            .catch(function(){});
+        } catch(_){}
+      }
+
+      function injectABStyles(){
+        if(document.getElementById('lps-ab-styles')) return;
+        var css =
+          '.lps-ab-hid{display:none !important}'+
+          '.lps-ab-proof{display:flex;align-items:center;gap:8px;background:#F0FBF7;border:1px solid #CBEEDF;'+
+            'border-radius:999px;padding:7px 12px;margin:0 0 12px;font-weight:600;font-size:12.5px;color:#00785F}'+
+          '.lps-ab-dot{flex:none;width:8px;height:8px;border-radius:50%;background:#2EE6A8;animation:lpsAbPulse 1.8s infinite}'+
+          '@keyframes lpsAbPulse{70%{box-shadow:0 0 0 8px rgba(46,230,168,0)}}'+
+          '.lps-ab-prog{height:6px;border-radius:999px;background:#EAF3F2;overflow:hidden;margin:0 0 5px}'+
+          '.lps-ab-prog i{display:block;height:100%;width:50%;background:#00B894;border-radius:999px;transition:width .35s}'+
+          '.lps-ab-steplab{margin:0 0 10px !important;font-size:12px;color:#42606B}'+
+          '.lps-ab-next{display:block;width:100%;margin-top:14px;border:0;border-radius:10px;color:#fff;'+
+            'font-weight:700;font-size:15px;padding:14px 18px;cursor:pointer;font-family:inherit}'+
+          '.lps-ab-next:disabled{opacity:.45;cursor:not-allowed}'+
+          '.lps-ab-addmail{display:inline-block;margin:8px 0 0;font-weight:600;font-size:12.5px;color:#00785F;'+
+            'text-decoration:none;border-bottom:1px dashed;cursor:pointer}'+
+          '.lps-ab-geonote,.lps-ab-micro{margin:7px 0 0 !important;font-size:12px;color:#42606B}'+
+          '.lps-ab-micro{text-align:center;color:#00785F;font-weight:600}';
+        var st = document.createElement('style'); st.id = 'lps-ab-styles'; st.textContent = css;
+        document.head.appendChild(st);
+      }
     }
 
     function loadTypebotWidget(cfg){
@@ -639,8 +825,9 @@
       })
       .then(function(){
         if(window.dataLayer){
-          var dl = { event: 'lead_submit', form_id: cfg.formId, bot_score: botScore };
-          if(cfg.unidade) dl.unidade = cfg.unidade;
+          var dl = { event: 'lead_submit', form_id: cfg.formId, operadora: cfg.operadora, bot_score: botScore };
+          if(cfg.unidade)  dl.unidade    = cfg.unidade;
+          if(abVariant)    dl.ab_variant = abVariant;   // amarra a conversão ao braço A/B
           window.dataLayer.push(dl);
         }
         self.reset();
